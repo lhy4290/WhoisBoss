@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>誰當老闆誰收錢 - 可愛網頁版</title>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* 避免圖示在載入前閃爍 */
+        .lucide { width: 22px; height: 22px; stroke-width: 2.5; }
+        
+        /* 自訂按鈕按下的動畫效果 */
+        .btn-active-pressed:active {
+            border-bottom-width: 0px !important;
+            transform: translateY(8px) !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100 flex flex-col items-center py-6 font-sans">
+
+    <h1 class="text-3xl md:text-4xl font-extrabold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-violet-500 drop-shadow-sm tracking-widest">
+        ✨ 誰當老闆誰收錢 ✨
+    </h1>
+
+    <!-- 遊戲主版面 -->
+    <div class="relative w-full max-w-4xl aspect-square max-h-[85vh] bg-white/60 backdrop-blur-md border-8 border-white rounded-[2.5rem] shadow-2xl p-2 md:p-4 grid grid-cols-8 grid-rows-8 gap-2" id="board-container">
+        
+        <!-- 外圍的 28 個格子將由 JavaScript 動態生成並放入這裡 -->
+
+        <!-- 中央 UI 儀表板 -->
+        <div style="grid-column: 2 / 8; grid-row: 2 / 8;" class="bg-white/80 rounded-3xl shadow-inner border-4 border-pink-100 p-4 flex flex-col items-center m-2 z-10">
+            
+            <div class="grid grid-cols-2 gap-4 w-full h-1/3 mb-4">
+                <!-- 玩家一狀態 -->
+                <div id="player0-card" class="p-3 rounded-2xl border-4 transition-all duration-300 border-sky-300 bg-sky-50 shadow-md transform scale-105">
+                    <h2 class="font-bold text-sky-700 flex items-center justify-center gap-2 text-lg">
+                        🐶 汪汪玩家
+                    </h2>
+                    <p id="player0-money" class="text-xl md:text-2xl font-black mt-2 text-center text-sky-900">$1,000,000</p>
+                    <div class="text-center mt-2">
+                        <span id="player0-role" class="inline-block px-3 py-1 text-xs font-bold rounded-full bg-sky-200 text-sky-800">
+                            上班族
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 玩家二狀態 -->
+                <div id="player1-card" class="p-3 rounded-2xl border-4 transition-all duration-300 border-gray-100 bg-white">
+                    <h2 class="font-bold text-rose-700 flex items-center justify-center gap-2 text-lg">
+                        🐱 喵喵玩家
+                    </h2>
+                    <p id="player1-money" class="text-xl md:text-2xl font-black mt-2 text-center text-rose-900">$1,000,000</p>
+                    <div class="text-center mt-2">
+                        <span id="player1-role" class="inline-block px-3 py-1 text-xs font-bold rounded-full bg-sky-200 text-sky-800">
+                            上班族
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 骰子與操作區 -->
+            <div class="flex-1 flex flex-col items-center justify-center w-full">
+                <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-gray-700">
+                    輪到 <span id="turn-indicator" class="px-3 py-1 rounded-full text-white bg-sky-400">汪汪玩家 🐶</span> 了！
+                </h3>
+                
+                <button id="dice-btn" onclick="handleRollDice()" class="w-24 h-24 md:w-28 md:h-28 text-5xl font-black rounded-[2rem] shadow-xl transition-all transform flex items-center justify-center bg-gradient-to-b from-yellow-200 to-yellow-400 text-yellow-800 border-b-8 border-yellow-500 hover:from-yellow-300 hover:to-yellow-500 hover:-translate-y-2 btn-active-pressed">
+                    1
+                </button>
+                <p class="mt-6 text-pink-400 font-bold text-sm bg-pink-50 px-4 py-2 rounded-full animate-pulse border border-pink-200">點擊可愛骰子移動！</p>
+            </div>
+
+            <!-- 遊戲紀錄 (Log) -->
+            <div class="w-full h-1/4 mt-4 bg-white/60 backdrop-blur-sm rounded-2xl p-3 overflow-hidden border-2 border-pink-100 text-sm shadow-inner flex flex-col">
+                <div class="font-black text-pink-400 mb-2 flex items-center gap-1">
+                    <i data-lucide="heart-pulse" class="w-4 h-4"></i> 最新動態
+                </div>
+                <div id="logs-container" class="flex flex-col gap-2 mt-1 flex-1">
+                    <!-- Logs 將由 JS 動態產生 -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // 棋盤格設定資料
+        const BOARD_TILES = [
+            { id: 0, name: 'START', label: '總部', type: 'start', r: 8, c: 1, bg: 'bg-rose-100 border-rose-300 text-rose-700', icon: 'home' },
+            { id: 1, name: '建築師', label: '職業', type: 'profession', r: 8, c: 2, bg: 'bg-orange-100 border-orange-300 text-orange-700', icon: 'briefcase' },
+            { id: 2, name: '我是企業家', label: '身分', type: 'role_boss', r: 8, c: 3, bg: 'bg-pink-100 border-pink-300 text-pink-700', icon: 'user-cog' },
+            { id: 3, name: '金銀珠寶', label: '每點1萬', type: 'company', cost: 10000, r: 8, c: 4, bg: 'bg-fuchsia-100 border-fuchsia-300 text-fuchsia-700', icon: 'building-2' },
+            { id: 4, name: '我是上班族', label: '身分', type: 'role_employee', r: 8, c: 5, bg: 'bg-sky-100 border-sky-300 text-sky-700', icon: 'user' },
+            { id: 5, name: '銷貨收入', label: '+5萬', type: 'sale', r: 8, c: 6, bg: 'bg-emerald-100 border-emerald-300 text-emerald-700', icon: 'dollar-sign' },
+            { id: 6, name: '財經新聞', label: '機會', type: 'news', r: 8, c: 7, bg: 'bg-amber-100 border-amber-300 text-amber-700', icon: 'newspaper' },
+            { id: 7, name: '保險公司', label: '保險', type: 'insurance', r: 8, c: 8, bg: 'bg-sky-200 border-sky-400 text-sky-800', icon: 'shield' },
+            { id: 8, name: '會計師', label: '職業', type: 'profession', r: 7, c: 8, bg: 'bg-orange-100 border-orange-300 text-orange-700', icon: 'briefcase' },
+            { id: 9, name: '我是企業家', label: '身分', type: 'role_boss', r: 6, c: 8, bg: 'bg-pink-100 border-pink-300 text-pink-700', icon: 'user-cog' },
+            { id: 10, name: '五星級飯店', label: '每點3千', type: 'company', cost: 3000, r: 5, c: 8, bg: 'bg-fuchsia-100 border-fuchsia-300 text-fuchsia-700', icon: 'building-2' },
+            { id: 11, name: '我是上班族', label: '身分', type: 'role_employee', r: 4, c: 8, bg: 'bg-sky-100 border-sky-300 text-sky-700', icon: 'user' },
+            { id: 12, name: '計程車', label: '交通', type: 'taxi', r: 3, c: 8, bg: 'bg-slate-100 border-slate-300 text-slate-700', icon: 'car-taxi-front' },
+            { id: 13, name: '財經新聞', label: '機會', type: 'news', r: 2, c: 8, bg: 'bg-amber-100 border-amber-300 text-amber-700', icon: 'newspaper' },
+            { id: 14, name: '政府', label: '稅收', type: 'gov', r: 1, c: 8, bg: 'bg-slate-200 border-slate-400 text-slate-800', icon: 'landmark' },
+            { id: 15, name: '律師', label: '職業', type: 'profession', r: 1, c: 7, bg: 'bg-orange-100 border-orange-300 text-orange-700', icon: 'briefcase' },
+            { id: 16, name: '我是企業家', label: '身分', type: 'role_boss', r: 1, c: 6, bg: 'bg-pink-100 border-pink-300 text-pink-700', icon: 'user-cog' },
+            { id: 17, name: '航空公司', label: '每點5千', type: 'company', cost: 5000, r: 1, c: 5, bg: 'bg-fuchsia-100 border-fuchsia-300 text-fuchsia-700', icon: 'building-2' },
+            { id: 18, name: '我是上班族', label: '身分', type: 'role_employee', r: 1, c: 4, bg: 'bg-sky-100 border-sky-300 text-sky-700', icon: 'user' },
+            { id: 19, name: '銷貨收入', label: '+5萬', type: 'sale', r: 1, c: 3, bg: 'bg-emerald-100 border-emerald-300 text-emerald-700', icon: 'dollar-sign' },
+            { id: 20, name: '財經新聞', label: '機會', type: 'news', r: 1, c: 2, bg: 'bg-amber-100 border-amber-300 text-amber-700', icon: 'newspaper' },
+            { id: 21, name: '證券交易所', label: '投資', type: 'stock', r: 1, c: 1, bg: 'bg-slate-100 border-slate-300 text-slate-700', icon: 'trending-up' },
+            { id: 22, name: '醫生', label: '職業', type: 'profession', r: 2, c: 1, bg: 'bg-orange-100 border-orange-300 text-orange-700', icon: 'briefcase' },
+            { id: 23, name: '我是企業家', label: '身分', type: 'role_boss', r: 3, c: 1, bg: 'bg-pink-100 border-pink-300 text-pink-700', icon: 'user-cog' },
+            { id: 24, name: '百貨公司', label: '每點2千', type: 'company', cost: 2000, r: 4, c: 1, bg: 'bg-fuchsia-100 border-fuchsia-300 text-fuchsia-700', icon: 'building-2' },
+            { id: 25, name: '我是上班族', label: '身分', type: 'role_employee', r: 5, c: 1, bg: 'bg-sky-100 border-sky-300 text-sky-700', icon: 'user' },
+            { id: 26, name: '購貨支出', label: '-3萬', type: 'purchase', r: 6, c: 1, bg: 'bg-rose-100 border-rose-300 text-rose-700', icon: 'shopping-bag' },
+            { id: 27, name: '財經新聞', label: '機會', type: 'news', r: 7, c: 1, bg: 'bg-amber-100 border-amber-300 text-amber-700', icon: 'newspaper' },
+        ];
+
+        const NEWS_CARDS = [
+            { text: "股票大漲！獲得現金 80,000 元", value: 80000 },
+            { text: "遇到金融海嘯，資產縮水 50,000 元", value: -50000 },
+            { text: "公司分紅！獲得現金 30,000 元", value: 30000 },
+            { text: "交通違規罰款 10,000 元", value: -10000 },
+            { text: "樂透中獎！獲得現金 100,000 元", value: 100000 },
+        ];
+
+        // 遊戲狀態變數
+        let players = [
+            { id: 0, name: "汪汪玩家", avatar: "🐶", pos: 0, money: 1000000, role: "上班族" },
+            { id: 1, name: "喵喵玩家", avatar: "🐱", pos: 0, money: 1000000, role: "上班族" }
+        ];
+        let turn = 0;
+        let diceNum = 1;
+        let isRolling = false;
+        let logs = ["遊戲開始！雙方初始資金 1,000,000 元"];
+
+        // 初始化遊戲
+        function initGame() {
+            renderBoardTiles();
+            lucide.createIcons(); // 渲染 Lucide 圖示
+            updateDashboard();
+            updatePlayerPositionsOnBoard();
+            renderLogs();
+        }
+
+        // 動態生成 28 個格子
+        function renderBoardTiles() {
+            const container = document.getElementById('board-container');
+            
+            BOARD_TILES.forEach(tile => {
+                const tileDiv = document.createElement('div');
+                tileDiv.id = `tile-${tile.id}`;
+                tileDiv.style.gridColumn = tile.c;
+                tileDiv.style.gridRow = tile.r;
+                tileDiv.className = `${tile.bg} border-2 border-b-4 rounded-2xl flex flex-col items-center justify-center p-1 text-center shadow-sm relative transition-transform hover:-translate-y-1 hover:shadow-md`;
+                
+                tileDiv.innerHTML = `
+                    <span class="text-[10px] md:text-xs font-black mb-1">${tile.name}</span>
+                    <div class="hidden md:block opacity-80"><i data-lucide="${tile.icon}"></i></div>
+                    <span class="text-[9px] md:text-[10px] opacity-70 mt-1 font-bold">${tile.label}</span>
+                    <div id="players-on-tile-${tile.id}" class="absolute -bottom-2 w-full flex justify-center gap-1 pointer-events-none z-20"></div>
+                `;
+                // 將格子安插到容器中 (放在儀表板前面)
+                container.insertBefore(tileDiv, container.lastElementChild);
+            });
+        }
+
+        // 擲骰子邏輯
+        function handleRollDice() {
+            if (isRolling) return;
+            isRolling = true;
+            
+            const btn = document.getElementById('dice-btn');
+            // 按鈕變成旋轉狀態
+            btn.className = "w-24 h-24 md:w-28 md:h-28 text-5xl font-black rounded-[2rem] shadow-xl transition-all transform flex items-center justify-center bg-gray-200 animate-spin text-gray-400 border-4 border-gray-300 scale-95 pointer-events-none";
+            btn.innerHTML = '🎲';
+
+            let rolls = 0;
+            const interval = setInterval(() => {
+                rolls++;
+                if (rolls > 10) {
+                    clearInterval(interval);
+                    const finalDice = Math.floor(Math.random() * 6) + 1;
+                    diceNum = finalDice;
+                    executeTurn(finalDice);
+                    isRolling = false;
+                    
+                    // 恢復按鈕狀態
+                    btn.className = "w-24 h-24 md:w-28 md:h-28 text-5xl font-black rounded-[2rem] shadow-xl transition-all transform flex items-center justify-center bg-gradient-to-b from-yellow-200 to-yellow-400 text-yellow-800 border-b-8 border-yellow-500 hover:from-yellow-300 hover:to-yellow-500 hover:-translate-y-2 btn-active-pressed";
+                    btn.innerHTML = finalDice;
+                }
+            }, 50);
+        }
+
+        // 執行回合事件
+        function executeTurn(dice) {
+            const currentPlayer = players[turn];
+            const newPos = (currentPlayer.pos + dice) % 28;
+            const tile = BOARD_TILES[newPos];
+            
+            let newMoney = currentPlayer.money;
+            let newRole = currentPlayer.role;
+            let actionMsg = "";
+
+            // 根據踩到的格子執行事件
+            switch (tile.type) {
+                case 'company':
+                    const cost = tile.cost * dice;
+                    newMoney -= cost;
+                    actionMsg = `在 ${tile.name} 消費，花費 (點數${dice} x ${tile.cost}) = ${cost} 元`;
+                    break;
+                case 'role_boss':
+                    newRole = '企業家';
+                    actionMsg = `身分轉變為 【企業家】！`;
+                    break;
+                case 'role_employee':
+                    newRole = '上班族';
+                    actionMsg = `身分轉變為 【上班族】！`;
+                    break;
+                case 'gov':
+                    const tax = currentPlayer.role === '企業家' ? 10000 * dice : 1000 * dice;
+                    newMoney -= tax;
+                    actionMsg = `繳交政府稅收，${currentPlayer.role}費率 (點數${dice}) = ${tax} 元`;
+                    break;
+                case 'sale':
+                    newMoney += 50000;
+                    actionMsg = `銷貨收入！賺取 50,000 元`;
+                    break;
+                case 'purchase':
+                    newMoney -= 30000;
+                    actionMsg = `購貨支出，花費 30,000 元`;
+                    break;
+                case 'news':
+                    const news = NEWS_CARDS[Math.floor(Math.random() * NEWS_CARDS.length)];
+                    newMoney += news.value;
+                    actionMsg = `翻開財經新聞：「${news.text}」`;
+                    break;
+                case 'taxi':
+                    const taxiFare = 100 * dice;
+                    newMoney -= taxiFare;
+                    actionMsg = `搭乘計程車，支付 ${taxiFare} 元`;
+                    break;
+                case 'start':
+                    newMoney += 200000;
+                    actionMsg = `回到總部！領取獎金 200,000 元`;
+                    break;
+                default:
+                    actionMsg = `抵達 ${tile.name}，休息一回合。`;
+            }
+
+            addLog(`[${currentPlayer.name}] 擲出 ${dice} 點，前進到「${tile.name}」。${actionMsg}`);
+
+            // 更新資料模型
+            currentPlayer.pos = newPos;
+            currentPlayer.money = newMoney;
+            currentPlayer.role = newRole;
+
+            // 換下一位玩家
+            turn = turn === 0 ? 1 : 0;
+            
+            // 更新畫面
+            updateDashboard();
+            updatePlayerPositionsOnBoard();
+        }
+
+        // 新增遊戲紀錄
+        function addLog(msg) {
+            logs.unshift(msg); // 加到陣列開頭
+            if (logs.length > 5) logs.pop(); // 保持最多5筆
+            renderLogs();
+        }
+
+        // 渲染遊戲紀錄
+        function renderLogs() {
+            const container = document.getElementById('logs-container');
+            container.innerHTML = '';
+            
+            logs.forEach((log, index) => {
+                const logDiv = document.createElement('div');
+                logDiv.className = `${index === 0 ? 'text-gray-800 font-bold bg-white p-2 rounded-lg shadow-sm border border-gray-100' : 'text-gray-400 px-2'} text-xs md:text-sm truncate transition-all`;
+                logDiv.innerText = log;
+                container.appendChild(logDiv);
+            });
+        }
+
+        // 更新地圖上的狗狗與貓貓位置
+        function updatePlayerPositionsOnBoard() {
+            // 先清空所有格子上的玩家
+            BOARD_TILES.forEach(tile => {
+                document.getElementById(`players-on-tile-${tile.id}`).innerHTML = '';
+            });
+
+            // 重新放置玩家
+            players.forEach(p => {
+                const container = document.getElementById(`players-on-tile-${p.pos}`);
+                const avatarDiv = document.createElement('div');
+                avatarDiv.className = 'text-xl md:text-3xl drop-shadow-md animate-bounce';
+                avatarDiv.innerText = p.avatar;
+                container.appendChild(avatarDiv);
+            });
+        }
+
+        // 更新中央儀表板 (金錢、狀態、輪替UI)
+        function updateDashboard() {
+            // 更新金錢與身分文字
+            document.getElementById('player0-money').innerText = `$${players[0].money.toLocaleString()}`;
+            document.getElementById('player1-money').innerText = `$${players[1].money.toLocaleString()}`;
+            
+            const role0 = document.getElementById('player0-role');
+            role0.innerText = players[0].role;
+            role0.className = `inline-block px-3 py-1 text-xs font-bold rounded-full ${players[0].role === '企業家' ? 'bg-pink-200 text-pink-800' : 'bg-sky-200 text-sky-800'}`;
+
+            const role1 = document.getElementById('player1-role');
+            role1.innerText = players[1].role;
+            role1.className = `inline-block px-3 py-1 text-xs font-bold rounded-full ${players[1].role === '企業家' ? 'bg-pink-200 text-pink-800' : 'bg-sky-200 text-sky-800'}`;
+
+            // 更新目前輪到誰的視覺效果
+            const card0 = document.getElementById('player0-card');
+            const card1 = document.getElementById('player1-card');
+            const indicator = document.getElementById('turn-indicator');
+
+            if (turn === 0) {
+                card0.className = "p-3 rounded-2xl border-4 transition-all duration-300 border-sky-300 bg-sky-50 shadow-md transform scale-105";
+                card1.className = "p-3 rounded-2xl border-4 transition-all duration-300 border-gray-100 bg-white transform scale-100";
+                indicator.className = "px-3 py-1 rounded-full text-white bg-sky-400";
+                indicator.innerText = `${players[0].name} ${players[0].avatar}`;
+            } else {
+                card0.className = "p-3 rounded-2xl border-4 transition-all duration-300 border-gray-100 bg-white transform scale-100";
+                card1.className = "p-3 rounded-2xl border-4 transition-all duration-300 border-rose-300 bg-rose-50 shadow-md transform scale-105";
+                indicator.className = "px-3 py-1 rounded-full text-white bg-rose-400";
+                indicator.innerText = `${players[1].name} ${players[1].avatar}`;
+            }
+        }
+
+        // 啟動遊戲
+        window.onload = initGame;
+    </script>
+</body>
+</html>
