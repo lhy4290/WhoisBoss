@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>誰當老闆誰收錢 - 3D 森林立體版</title>
+    
+    <!-- 引入 Tailwind CSS (UI) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Lucide Icons (圖示) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- 引入 Three.js (3D 引擎) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- 引入 OrbitControls (視角控制) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #2bb1b0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; cursor: grab; }
+        body:active { cursor: grabbing; }
+        .lucide { width: 18px; height: 18px; stroke-width: 2.5; }
+        
+        /* 隱藏原生滾動條 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 10px; }
+
+        /* 骰子按壓效果 */
+        .btn-press:active { transform: translateY(4px) scale(0.95); box-shadow: 0 0px 0px rgba(0,0,0,0); }
+        
+        /* 毛玻璃 UI 效果 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px 0 rgba(0, 100, 100, 0.1);
+        }
+
+        /* 輸入框樣式 */
+        .custom-input {
+            background: rgba(255, 255, 255, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            transition: all 0.3s;
+        }
+        .custom-input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.9);
+            border-color: #2dd4bf;
+            box-shadow: 0 0 10px rgba(45, 212, 191, 0.3);
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <!-- 3D Canvas 容器 -->
+    <div id="webgl-container" class="absolute inset-0 z-0"></div>
+
+    <!-- ⭐ 開始畫面 (Main Menu) -->
+    <div id="start-screen" class="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-md transition-opacity duration-500">
+        <div class="glass-panel p-6 md:p-10 rounded-[2.5rem] w-11/12 max-w-lg shadow-[0_20px_50px_rgba(0,0,0,0.3)] border-4 border-white/40 flex flex-col items-center">
+            
+            <div class="bg-teal-500 text-white w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-lg transform rotate-12">
+                <i data-lucide="building-2" class="w-10 h-10"></i>
+            </div>
+            
+            <h1 class="text-3xl md:text-4xl font-black text-slate-800 mb-2 drop-shadow-sm text-center">
+                都會商戰 <span class="text-teal-600">3D</span>
+            </h1>
+            <p class="text-slate-500 mb-6 font-bold text-sm">誰當老闆誰收錢</p>
+
+            <div class="w-full bg-white/40 rounded-2xl p-4 mb-6 border border-white/50">
+                <label class="block text-sm font-bold text-slate-700 mb-2">選擇遊玩人數 (1-5人)</label>
+                <div class="flex justify-between gap-2 mb-4">
+                    <button onclick="setPlayerCount(1)" id="btn-count-1" class="flex-1 py-2 rounded-xl font-bold bg-white text-slate-600 border-2 border-transparent hover:bg-teal-50 transition-colors">1</button>
+                    <button onclick="setPlayerCount(2)" id="btn-count-2" class="flex-1 py-2 rounded-xl font-bold bg-teal-500 text-white shadow-md border-2 border-teal-400 transition-colors">2</button>
+                    <button onclick="setPlayerCount(3)" id="btn-count-3" class="flex-1 py-2 rounded-xl font-bold bg-white text-slate-600 border-2 border-transparent hover:bg-teal-50 transition-colors">3</button>
+                    <button onclick="setPlayerCount(4)" id="btn-count-4" class="flex-1 py-2 rounded-xl font-bold bg-white text-slate-600 border-2 border-transparent hover:bg-teal-50 transition-colors">4</button>
+                    <button onclick="setPlayerCount(5)" id="btn-count-5" class="flex-1 py-2 rounded-xl font-bold bg-white text-slate-600 border-2 border-transparent hover:bg-teal-50 transition-colors">5</button>
+                </div>
+
+                <div id="player-inputs-container" class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                    <!-- 由 JS 動態產生 -->
+                </div>
+            </div>
+
+            <button onclick="startGame()" class="w-full py-4 bg-gradient-to-r from-teal-400 to-emerald-500 text-white text-lg font-black rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all active:scale-95">
+                進入大都會
+            </button>
+        </div>
+    </div>
+
+    <!-- UI 前景層 -->
+    <div id="game-ui" class="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 md:p-8 opacity-0 transition-opacity duration-500">
+        
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <h1 class="text-2xl md:text-3xl font-extrabold text-white drop-shadow-md tracking-wider flex items-center gap-2 shrink-0">
+                <i data-lucide="box" class="w-8 h-8 text-white"></i> 大都會 3D
+            </h1>
+            
+            <div id="players-container" class="flex flex-wrap gap-2 w-full lg:w-auto pointer-events-auto justify-start lg:justify-end">
+                <!-- 由 JS 動態產生 -->
+            </div>
+        </div>
+
+        <div class="flex flex-col md:flex-row justify-between items-end gap-4 pointer-events-none">
+            
+            <div class="glass-panel rounded-2xl w-full md:w-80 h-40 flex flex-col p-3 pointer-events-auto">
+                <h3 class="font-bold text-teal-800 text-sm flex items-center gap-1 mb-2 border-b border-teal-200/50 pb-1 flex-shrink-0">
+                    <i data-lucide="scrollText"></i> 遊戲紀錄
+                </h3>
+                <div id="logs-container" class="flex-1 overflow-y-auto flex flex-col gap-1 pr-1 text-xs md:text-sm">
+                    <!-- Logs generated by JS -->
+                </div>
+            </div>
+
+            <!-- 包含【放棄】與【骰子】的按鈕群組 -->
+            <div class="flex flex-col items-center pointer-events-auto">
+                <div id="turn-indicator" class="bg-blue-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg mb-3 animate-bounce">
+                    準備開始
+                </div>
+                <div class="flex items-center gap-4">
+                    <!-- 放棄按鈕 (預設隱藏) -->
+                    <button id="skip-btn" onclick="handleSkip()" class="hidden w-16 h-16 md:w-20 md:h-20 bg-slate-200 rounded-[1.5rem] shadow-[0_6px_0_#94a3b8,0_10px_15px_rgba(0,0,0,0.2)] border-2 border-slate-100 text-lg md:text-xl font-black text-slate-600 flex items-center justify-center transition-all btn-press hover:bg-slate-300">
+                        放棄
+                    </button>
+                    <!-- 骰子按鈕 -->
+                    <button id="dice-btn" onclick="handleRollDice()" class="w-20 h-20 md:w-24 md:h-24 bg-white rounded-3xl shadow-[0_8px_0_#cbd5e1,0_15px_20px_rgba(0,0,0,0.2)] border-2 border-slate-100 text-4xl font-black text-slate-700 flex items-center justify-center transition-all btn-press hover:bg-slate-50">
+                        🎲
+                    </button>
+                </div>
+            </div>
+            
+        </div>
+        
+        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-xs pointer-events-none drop-shadow-md font-bold hidden md:block">
+            拖曳旋轉視角 • 滾輪縮放
+        </div>
+    </div>
+
+    <!-- 🌟 新聞抽卡動畫彈出層 -->
+    <div id="news-draw-overlay" class="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div id="news-draw-card" class="bg-white border-8 border-slate-200 p-8 rounded-[2rem] shadow-2xl text-center flex flex-col items-center transform scale-50 transition-transform duration-300">
+            <div class="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                <i data-lucide="newspaper" class="w-10 h-10 text-amber-500 animate-pulse"></i>
+            </div>
+            <h2 class="text-3xl font-black text-slate-800 mb-6 tracking-widest border-b-2 border-slate-100 pb-4 w-full">全球財經新聞</h2>
+            <div id="news-draw-text" class="text-2xl font-bold text-amber-600 h-24 flex items-center justify-center px-4 leading-relaxed">
+                抽卡中...
+            </div>
+        </div>
+    </div>
+
+    <!-- 🌟 股市交易大廳彈出層 -->
+    <div id="stock-market-overlay" class="absolute inset-0 z-[70] flex items-center justify-center bg-slate-900/90 backdrop-blur-md hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-800 w-11/12 max-w-6xl h-5/6 rounded-[2.5rem] shadow-2xl border border-slate-600 flex flex-col overflow-hidden">
+            <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+                <div>
+                    <h2 class="text-2xl md:text-3xl font-black text-white flex items-center gap-3 tracking-widest">
+                        <i data-lucide="trending-up" class="text-emerald-400"></i> 金融商品行情及時表
+                    </h2>
+                    <p class="text-slate-400 font-bold mt-2 text-sm">所有行家皆可進場調節持股，爭奪企業經營權！</p>
+                    <p class="text-rose-400 font-bold mt-1 text-xs md:text-sm animate-pulse">【當公司的老闆必須支付管銷費用，一家公司的每月固定支出為280000元】</p>
+                </div>
+                <button onclick="closeStockMarket()" class="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-lg flex items-center gap-2">
+                    結束交易 <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="stock-market-content" class="flex-1 p-6 overflow-y-auto text-slate-200">
+                <!-- 由 JS 動態生成交易表格 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 事件卡片 (Event Card) 彈出層 -->
+    <div id="event-card-overlay" class="absolute inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-opacity duration-300">
+        <div id="event-card" class="bg-white/95 backdrop-blur-xl border-4 border-white shadow-[0_20px_60px_rgba(0,0,0,0.4)] rounded-3xl p-6 md:p-8 max-w-sm w-11/12 flex flex-col items-center text-center origin-center">
+            <div id="ec-icon" class="w-16 h-16 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg bg-teal-400">
+                <i data-lucide="zap" class="w-8 h-8"></i>
+            </div>
+            <h2 id="ec-title" class="text-2xl font-black text-slate-800 mb-2">事件標題</h2>
+            <p id="ec-desc" class="text-slate-600 font-bold text-lg">事件描述</p>
+            <div id="ec-player" class="mt-4 px-4 py-1.5 rounded-full text-sm font-bold text-white shadow-md">玩家</div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. 遊戲邏輯與資料
+        // ==========================================
+        const BOARD_TILES = [
+            { id: 0, name: 'START', label: '總部', type: 'start' },
+            { id: 1, name: '建築師', label: '職業', type: 'profession' },
+            { id: 2, name: '我是企業家', label: '身分', type: 'role_boss' },
+            { id: 3, name: '金銀珠寶', label: '每點1萬', type: 'company', cost: 10000 },
+            { id: 4, name: '我是上班族', label: '身分', type: 'role_employee' },
+            { id: 5, name: '銷貨收入', label: '+5萬', type: 'sale' },
+            { id: 6, name: '財經新聞', label: '機會', type: 'news' },
+            { id: 7, name: '保險公司', label: '買保單', type: 'insurance' },
+            { id: 8, name: '會計師', label: '職業', type: 'profession' },
+            { id: 9, name: '我是企業家', label: '身分', type: 'role_boss' },
+            { id: 10, name: '五星級飯店', label: '每點3千', type: 'company', cost: 3000 },
+            { id: 11, name: '我是上班族', label: '身分', type: 'role_employee' },
+            { id: 12, name: '計程車', label: '決定距離', type: 'taxi' },
+            { id: 13, name: '財經新聞', label: '機會', type: 'news' },
+            { id: 14, name: '政府', label: '決定稅金', type: 'gov' },
+            { id: 15, name: '律師', label: '職業', type: 'profession' },
+            { id: 16, name: '我是企業家', label: '身分', type: 'role_boss' },
+            { id: 17, name: '航空公司', label: '每點5千', type: 'company', cost: 5000 },
+            { id: 18, name: '我是上班族', label: '身分', type: 'role_employee' },
+            { id: 19, name: '銷貨收入', label: '+5萬', type: 'sale' },
+            { id: 20, name: '財經新聞', label: '機會', type: 'news' },
+            { id: 21, name: '證券交易所', label: '買股投資', type: 'stock' },
+            { id: 22, name: '醫生', label: '職業', type: 'profession' },
+            { id: 23, name: '我是企業家', label: '身分', type: 'role_boss' },
+            { id: 24, name: '百貨公司', label: '每點2千', type: 'company', cost: 2000 },
+            { id: 25, name: '我是上班族', label: '身分', type: 'role_employee' },
+            { id: 26, name: '購貨支出', label: '-3萬', type: 'purchase' },
+            { id: 27, name: '財經新聞', label: '機會', type: 'news' },
+        ];
+
+        const NEWS_CARDS = [
+            { text: "📉 金融商品行情及時表 📈\n股市開盤！", value: 0, isStock: true },
+        ];
+
+        // 股市資料
+        let stockPrices = {
+            '金銀珠寶': 150, '百貨公司': 80, '航空公司': 200, 
+            '五星級飯店': 120, '保險公司': 100, '證券交易所': 250
+        };
+        let stockTrends = {
+            '金銀珠寶': 0, '百貨公司': 0, '航空公司': 0, 
+            '五星級飯店': 0, '保險公司': 0, '證券交易所': 0
+        };
+
+        // ⭐ 全域記錄目前各公司的老闆是誰 (對應 player.id)
+        let companyBosses = {};
+
+        const DEFAULT_ANIMALS = ["🐺 影狼", "🐱 夜貓", "🐻 胖熊", "🦅 飛鷹", "🦊 靈狐"];
+        const THEME_COLORS = [
+            { hex: 0x3b82f6, tw: "blue" },   
+            { hex: 0xf43f5e, tw: "rose" },   
+            { hex: 0x22c55e, tw: "green" },  
+            { hex: 0xf59e0b, tw: "amber" },  
+            { hex: 0x8b5cf6, tw: "purple" }  
+        ];
+
+        let selectedPlayerCount = 2;
+        let players = [];
+        let turn = 0;
+        let isAnimating = false; 
+        let logs = [];
+        let clouds = []; 
+        let pendingAction = null; 
+
+        const pathCoords = [];
+        for(let i=7; i>=0; i--) pathCoords.push({x: i, z: 7});    
+        for(let i=6; i>=0; i--) pathCoords.push({x: 0, z: i});    
+        for(let i=1; i<=7; i++) pathCoords.push({x: i, z: 0});    
+        for(let i=1; i<=6; i++) pathCoords.push({x: 7, z: i});    
+
+        // ==========================================
+        // 2. 開始選單互動邏輯
+        // ==========================================
+        function setPlayerCount(count) {
+            selectedPlayerCount = count;
+            for (let i = 1; i <= 5; i++) {
+                const btn = document.getElementById(`btn-count-${i}`);
+                if (i === count) {
+                    btn.className = "flex-1 py-2 rounded-xl font-bold bg-teal-500 text-white shadow-md border-2 border-teal-400 transition-colors";
+                } else {
+                    btn.className = "flex-1 py-2 rounded-xl font-bold bg-white text-slate-600 border-2 border-transparent hover:bg-teal-50 transition-colors";
+                }
+            }
+            renderPlayerInputs();
+        }
+
+        function renderPlayerInputs() {
+            const container = document.getElementById('player-inputs-container');
+            container.innerHTML = '';
+            for (let i = 0; i < selectedPlayerCount; i++) {
+                const twColor = THEME_COLORS[i].tw;
+                const inputHtml = `
+                    <div class="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
+                        <div class="w-6 h-6 rounded-full bg-${twColor}-500 shadow-sm shrink-0"></div>
+                        <input type="text" id="input-p${i}" value="${DEFAULT_ANIMALS[i]}" 
+                               class="custom-input w-full px-3 py-1.5 rounded-lg text-sm font-bold text-slate-700" 
+                               placeholder="請輸入玩家名稱...">
+                    </div>
+                `;
+                container.innerHTML += inputHtml;
+            }
+        }
+
+        function startGame() {
+            players = [];
+            companyBosses = {}; // 重置所有老闆狀態
+
+            for (let i = 0; i < selectedPlayerCount; i++) {
+                const nameInput = document.getElementById(`input-p${i}`).value || `玩家 ${i+1}`;
+                players.push({
+                    id: i,
+                    name: nameInput,
+                    pos: 0,
+                    money: 1000000,
+                    role: "上班族",
+                    colorHex: THEME_COLORS[i].hex,
+                    colorTw: THEME_COLORS[i].tw,
+                    policies: 0,
+                    certs: [],
+                    stocks: {} 
+                });
+            }
+            
+            document.getElementById('start-screen').classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('game-ui').classList.remove('opacity-0');
+            
+            logs = [`🎲 遊戲開始！共 ${selectedPlayerCount} 位玩家參與。<br>每位獲得 1,000,000 啟動資金。`];
+            addLog(logs[0]);
+
+            createPlayers();
+            updateDOM();
+        }
+
+        // ==========================================
+        // 3. Three.js 3D 引擎設置
+        // ==========================================
+        let scene, camera, renderer, controls;
+        let playerMeshes = [];
+        
+        const TILE_SIZE = 12.8; 
+        const OFFSET = -44.8; 
+
+        const materials = {
+            grass: new THREE.MeshLambertMaterial({ color: 0x8bd054 }),
+            dirt: new THREE.MeshLambertMaterial({ color: 0x795548 }),
+            stone: new THREE.MeshLambertMaterial({ color: 0xe2e8f0 }),
+            red: new THREE.MeshLambertMaterial({ color: 0xef4444 }),
+            darkRed: new THREE.MeshLambertMaterial({ color: 0xb91c1c }),
+            blue: new THREE.MeshLambertMaterial({ color: 0x3b82f6 }),
+            cyan: new THREE.MeshLambertMaterial({ color: 0x06b6d4 }),
+            gold: new THREE.MeshLambertMaterial({ color: 0xf59e0b }),
+            purple: new THREE.MeshLambertMaterial({ color: 0x8b5cf6 }),
+            magenta: new THREE.MeshLambertMaterial({ color: 0xd946ef }),
+            pink: new THREE.MeshLambertMaterial({ color: 0xf472b6 }),
+            yellow: new THREE.MeshLambertMaterial({ color: 0xfacc15 }),
+            green: new THREE.MeshLambertMaterial({ color: 0x22c55e }),
+            gray: new THREE.MeshLambertMaterial({ color: 0x64748b }),
+            darkGray: new THREE.MeshLambertMaterial({ color: 0x334155 }),
+            brown: new THREE.MeshLambertMaterial({ color: 0xa16207 }),
+            black: new THREE.MeshLambertMaterial({ color: 0x1e293b }),
+            portal: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+            asphalt: new THREE.MeshLambertMaterial({ color: 0x334155 }), 
+            sidewalk: new THREE.MeshLambertMaterial({ color: 0x94a3b8 }), 
+            cloud: new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }) 
+        };
+
+        function getCameraZoom(aspect) {
+            return aspect < 1 ? 120 / aspect : 100; 
+        }
+
+        function init3D() {
+            const container = document.getElementById('webgl-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x2bb1b0);
+
+            const aspect = window.innerWidth / window.innerHeight;
+            const d = getCameraZoom(aspect); 
+            camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
+            camera.position.set(150, 180, 150);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; 
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2.2; 
+            controls.minZoom = 0.5; 
+            controls.maxZoom = 2.5; 
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); 
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(20, 40, -20);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.left = -80;
+            dirLight.shadow.camera.right = 80;
+            dirLight.shadow.camera.top = 80;
+            dirLight.shadow.camera.bottom = -80;
+            scene.add(dirLight);
+
+            const fillLight = new THREE.DirectionalLight(0xaaddff, 0.4);
+            fillLight.position.set(-40, 40, 40);
+            scene.add(fillLight);
+
+            createWorld();
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+        }
+
+        function createMesh(geometry, material, x, y, z) {
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+
+        function buildCustomStructure(tile, parentMesh, bx, bz) {
+            const TOP = TILE_SIZE / 2; 
+            const group = new THREE.Group();
+            group.position.set(bx, TOP, bz);
+            group.scale.set(5.5, 5.5, 5.5); 
+
+            const box = (w, h, d, mat, yOff=0) => createMesh(new THREE.BoxGeometry(w, h, d), mat, 0, h/2 + yOff, 0);
+            const cyl = (rt, rb, h, s, mat, yOff=0) => createMesh(new THREE.CylinderGeometry(rt, rb, h, s), mat, 0, h/2 + yOff, 0);
+
+            switch(tile.name) {
+                case 'START':
+                    group.add(box(0.9, 0.2, 0.9, materials.red));
+                    group.add(box(0.5, 0.8, 0.5, materials.stone, 0.2));
+                    group.add(cyl(0, 0.4, 0.4, 4, materials.red, 1.0).rotateY(Math.PI/4));
+                    break;
+                case '金銀珠寶':
+                    const gem = createMesh(new THREE.OctahedronGeometry(0.35), materials.gold, 0, 0.6, 0);
+                    gem.name = "floatingGem"; 
+                    group.add(gem);
+                    group.add(cyl(0.2, 0.3, 0.2, 8, materials.gray));
+                    break;
+                case '五星級飯店':
+                    group.add(box(0.6, 1.2, 0.6, materials.purple));
+                    group.add(box(0.4, 0.2, 0.4, materials.gold, 1.2));
+                    break;
+                case '航空公司':
+                    group.add(box(0.4, 0.8, 0.4, materials.stone));
+                    group.add(box(0.8, 0.15, 0.3, materials.cyan, 0.8));
+                    break;
+                case '百貨公司':
+                    group.add(box(0.8, 0.5, 0.8, materials.pink));
+                    group.add(box(0.6, 0.3, 0.6, materials.stone, 0.5));
+                    break;
+                case '保險公司':
+                    group.add(box(0.7, 0.8, 0.7, materials.blue));
+                    group.add(box(0.8, 0.6, 0.2, materials.cyan, 0.1));
+                    break;
+                case '證券交易所':
+                    group.add(box(0.7, 0.6, 0.7, materials.darkGray));
+                    const trend = box(0.1, 0.6, 0.1, materials.green);
+                    trend.position.set(0.4, 0.3, 0);
+                    trend.rotation.z = -Math.PI / 6;
+                    group.add(trend);
+                    break;
+                case '財經新聞':
+                    const archGeo = new THREE.BoxGeometry(0.8, 1.0, 0.2);
+                    const arch = new THREE.Mesh(archGeo, materials.portal);
+                    arch.position.set(0, 0.5, 0);
+                    group.add(arch);
+                    const pLight = new THREE.PointLight(0xffffff, 0.5, 3);
+                    pLight.position.set(0, 0.5, 0);
+                    group.add(pLight);
+                    break;
+                case '醫生':
+                    group.add(box(0.6, 0.5, 0.6, materials.stone));
+                    const cross1 = box(0.3, 0.1, 0.62, materials.red, 0.2);
+                    const cross2 = box(0.1, 0.3, 0.62, materials.red, 0.1);
+                    group.add(cross1, cross2);
+                    break;
+                case '律師':
+                    group.add(box(0.5, 0.1, 0.5, materials.gray)); 
+                    group.add(box(0.05, 0.6, 0.05, materials.gray, 0.1)); 
+                    group.add(box(0.6, 0.05, 0.05, materials.gray, 0.65)); 
+                    group.add(cyl(0.15, 0.15, 0.05, 16, materials.gold, 0.5).translateX(-0.3));
+                    group.add(cyl(0.15, 0.15, 0.05, 16, materials.gold, 0.5).translateX(0.3));
+                    break;
+                case '建築師':
+                    group.add(box(0.5, 0.4, 0.5, materials.brown));
+                    const roof = cyl(0.45, 0.45, 0.5, 4, materials.yellow, 0.4);
+                    roof.rotation.y = Math.PI / 4;
+                    group.add(roof);
+                    break;
+                case '會計師':
+                    group.add(box(0.6, 0.1, 0.5, materials.darkGray));
+                    const screen = box(0.4, 0.05, 0.15, materials.green, 0.1);
+                    screen.position.z = -0.1;
+                    group.add(screen);
+                    group.add(box(0.1, 0.05, 0.1, materials.red, 0.1).translateZ(0.1).translateX(-0.15));
+                    group.add(box(0.1, 0.05, 0.1, materials.yellow, 0.1).translateZ(0.1).translateX(0.15));
+                    break;
+                case '我是企業家':
+                    const crown = cyl(0.2, 0.3, 0.4, 6, materials.magenta);
+                    crown.position.y = 0.2;
+                    group.add(crown);
+                    break;
+                case '我是上班族':
+                    group.add(box(0.5, 0.3, 0.3, materials.brown));
+                    const pc = box(0.2, 0.25, 0.05, materials.black, 0.3);
+                    pc.position.z = -0.05;
+                    group.add(pc);
+                    break;
+                case '政府':
+                    group.add(box(0.7, 0.4, 0.7, materials.stone));
+                    const dome = createMesh(new THREE.SphereGeometry(0.35, 16, 16, 0, Math.PI*2, 0, Math.PI/2), materials.gray, 0, 0.4, 0);
+                    group.add(dome);
+                    break;
+                case '計程車':
+                    group.add(box(0.6, 0.25, 0.3, materials.yellow));
+                    group.add(box(0.3, 0.2, 0.25, materials.black, 0.25));
+                    break;
+                case '銷貨收入':
+                    group.add(box(0.6, 0.3, 0.6, materials.green));
+                    const coin = cyl(0.2, 0.2, 0.05, 16, materials.gold, 0.3);
+                    coin.rotation.x = Math.PI / 2;
+                    coin.name = "floatingGem"; 
+                    group.add(coin);
+                    break;
+                case '購貨支出':
+                    group.add(box(0.4, 0.5, 0.3, materials.red));
+                    group.add(box(0.05, 0.2, 0.05, materials.stone, 0.5).translateX(-0.1));
+                    group.add(box(0.05, 0.2, 0.05, materials.stone, 0.5).translateX(0.1));
+                    group.add(box(0.25, 0.05, 0.05, materials.stone, 0.7));
+                    break;
+            }
+
+            group.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+
+            parentMesh.add(group);
+        }
+
+        function createWorld() {
+            const blockMaterials = [
+                materials.stone, materials.stone, 
+                materials.asphalt, materials.stone, 
+                materials.stone, materials.stone  
+            ];
+
+            const boxGeo = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
+            BOARD_TILES.forEach((tile, index) => {
+                const coord = pathCoords[index];
+                const px = coord.x * TILE_SIZE + OFFSET;
+                const pz = coord.z * TILE_SIZE + OFFSET;
+
+                let mesh;
+                if (tile.type === 'start') {
+                    mesh = new THREE.Mesh(boxGeo, materials.stone); 
+                    mesh.position.set(px, 0, pz);
+                } else {
+                    mesh = new THREE.Mesh(boxGeo, blockMaterials);
+                    mesh.position.set(px, 0, pz);
+                }
+
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                
+                let bx = 0, bz = 0;
+                const shiftInner = 4.4; 
+                if (coord.z === 0) bz = shiftInner; 
+                if (coord.z === 7) bz = -shiftInner;  
+                if (coord.x === 0) bx = shiftInner; 
+                if (coord.x === 7) bx = -shiftInner;  
+
+                buildCustomStructure(tile, mesh, bx, bz);
+                scene.add(mesh);
+            });
+
+            const innerBlockMaterials = [
+                materials.stone, materials.stone,
+                materials.sidewalk, materials.stone, 
+                materials.stone, materials.stone
+            ];
+
+            for (let i = 1; i <= 6; i++) {
+                for (let j = 1; j <= 6; j++) {
+                    const px = i * TILE_SIZE + OFFSET;
+                    const pz = j * TILE_SIZE + OFFSET;
+                    
+                    const innerMesh = new THREE.Mesh(boxGeo, innerBlockMaterials);
+                    innerMesh.position.set(px, 0, pz);
+                    innerMesh.castShadow = true;
+                    innerMesh.receiveShadow = true;
+                    scene.add(innerMesh);
+
+                    const bldgCount = Math.floor(Math.random() * 2) + 1; 
+                    for (let t = 0; t < bldgCount; t++) {
+                        const bldgGroup = new THREE.Group();
+                        const bw = 2.0 + Math.random() * 3.0;
+                        const bh = 4.0 + Math.random() * 12.0; 
+                        const bd = 2.0 + Math.random() * 3.0;
+                        const bldgMat = [materials.gray, materials.darkGray, materials.blue, materials.stone][Math.floor(Math.random()*4)];
+                        const bldgBody = createMesh(new THREE.BoxGeometry(bw, bh, bd), bldgMat, 0, bh/2, 0);
+                        bldgGroup.add(bldgBody);
+                        
+                        if(Math.random() > 0.5) {
+                            const roof = createMesh(new THREE.BoxGeometry(bw*0.5, 0.4, bd*0.5), materials.stone, 0, bh + 0.2, 0);
+                            bldgGroup.add(roof);
+                        }
+                        
+                        bldgGroup.scale.set(2.5, 2.5, 2.5);
+                        const tx = px + (Math.random() - 0.5) * (TILE_SIZE * 0.4);
+                        const tz = pz + (Math.random() - 0.5) * (TILE_SIZE * 0.4);
+                        const ty = (TILE_SIZE / 2); 
+                        bldgGroup.position.set(tx, ty, tz);
+                        scene.add(bldgGroup);
+                    }
+                }
+            }
+
+            const cloudGeo = new THREE.BoxGeometry(1, 1, 1); 
+            clouds = []; 
+            for(let i=0; i<30; i++) {
+                const rx = (Math.random() - 0.5) * 320;
+                const rz = (Math.random() - 0.5) * 320;
+                
+                if (Math.abs(rx) > TILE_SIZE * 4.5 || Math.abs(rz) > TILE_SIZE * 4.5) {
+                    const cloudGroup = new THREE.Group();
+                    const c1 = createMesh(cloudGeo, materials.cloud, 0, 0, 0); c1.scale.set(3, 1.5, 2);
+                    const c2 = createMesh(cloudGeo, materials.cloud, 1.2, 0.5, 0.5); c2.scale.set(2, 1.5, 1.5);
+                    const c3 = createMesh(cloudGeo, materials.cloud, -1.2, -0.2, -0.5); c3.scale.set(2.5, 1.2, 1.5);
+                    const c4 = createMesh(cloudGeo, materials.cloud, 0, 0.8, -0.5); c4.scale.set(2, 1.5, 1.5);
+                    c1.castShadow = false; c2.castShadow = false; c3.castShadow = false; c4.castShadow = false;
+                    cloudGroup.add(c1, c2, c3, c4);
+                    
+                    const scale = 4.0 + Math.random() * 6.0;
+                    cloudGroup.scale.set(scale, scale, scale);
+                    const ry = 32 + Math.random() * 48; 
+                    cloudGroup.position.set(rx, ry, rz);
+                    scene.add(cloudGroup);
+                    clouds.push(cloudGroup);
+                }
+            }
+        }
+
+        function getPlayerPos(tileIndex, playerIndex) {
+            const c = pathCoords[tileIndex];
+            const px = c.x * TILE_SIZE + OFFSET;
+            const pz = c.z * TILE_SIZE + OFFSET;
+
+            let outX = 0, outZ = 0;
+            const shiftOut = 3.6; 
+            if (c.z === 0) outZ = -shiftOut; 
+            if (c.z === 7) outZ = shiftOut;  
+            if (c.x === 0) outX = -shiftOut; 
+            if (c.x === 7) outX = shiftOut;  
+
+            const spacing = 1.8;
+            const offsets = [{ x: 0, z: 0 }, { x: -spacing, z: -spacing }, { x: spacing, z: spacing }, { x: -spacing, z: spacing }, { x: spacing, z: -spacing }];
+
+            let pOffsetX = 0, pOffsetZ = 0;
+            if (c.z === 0 || c.z === 7) {
+                pOffsetX = offsets[playerIndex % 5].x;
+            } else {
+                pOffsetZ = offsets[playerIndex % 5].z;
+            }
+
+            return { x: px + outX + pOffsetX, z: pz + outZ + pOffsetZ };
+        }
+
+        function createCharacter(playerColorHex) {
+            const group = new THREE.Group();
+            const skinMat = new THREE.MeshLambertMaterial({ color: 0xffe0bd }); 
+            const shirtMat = new THREE.MeshLambertMaterial({ color: playerColorHex }); 
+            const pantsMat = new THREE.MeshLambertMaterial({ color: 0x334155 }); 
+
+            const box = (w, h, d, mat, x, y, z) => {
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+                mesh.position.set(x, y, z);
+                mesh.castShadow = true; mesh.receiveShadow = true;
+                return mesh;
+            };
+
+            group.add(box(0.4, 0.4, 0.4, skinMat, 0, 1.0, 0)); 
+            group.add(box(0.5, 0.4, 0.3, shirtMat, 0, 0.6, 0)); 
+            group.add(box(0.15, 0.4, 0.15, skinMat, -0.325, 0.6, 0)); 
+            group.add(box(0.15, 0.4, 0.15, skinMat, 0.325, 0.6, 0)); 
+            group.add(box(0.2, 0.4, 0.2, pantsMat, -0.15, 0.2, 0)); 
+            group.add(box(0.2, 0.4, 0.2, pantsMat, 0.15, 0.2, 0)); 
+
+            group.scale.set(3.5, 3.5, 3.5);
+            return group;
+        }
+
+        function createPlayers() {
+            players.forEach((p, idx) => {
+                const mesh = createCharacter(p.colorHex);
+                const pos = getPlayerPos(0, idx);
+                mesh.position.set(pos.x, TILE_SIZE/2, pos.z);
+                scene.add(mesh);
+                playerMeshes.push(mesh);
+            });
+        }
+
+        function onWindowResize() {
+            const aspect = window.innerWidth / window.innerHeight;
+            const d = getCameraZoom(aspect);
+            camera.left = -d * aspect; camera.right = d * aspect;
+            camera.top = d; camera.bottom = -d;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ==========================================
+        // 4. UI 與 遊戲互動邏輯
+        // ==========================================
+        function endTurn() {
+            turn = (turn + 1) % players.length;
+            updateDOM();
+            isAnimating = false; 
+        }
+
+        function handleRollDice() {
+            if (isAnimating) return; 
+            isAnimating = true;
+            document.getElementById('skip-btn').classList.add('hidden'); 
+            
+            const btn = document.getElementById('dice-btn');
+            btn.innerHTML = '...';
+            btn.classList.add('animate-pulse');
+
+            setTimeout(() => {
+                const dice = Math.floor(Math.random() * 6) + 1;
+                btn.innerHTML = dice;
+                btn.classList.remove('animate-pulse');
+                
+                if (pendingAction) {
+                    processPendingAction(dice);
+                } else {
+                    startPlayerMovement(dice);
+                }
+            }, 600);
+        }
+
+        function handleSkip() {
+            if (!pendingAction || pendingAction.type !== 'profession_exam') return;
+            const currentPlayer = players[turn];
+            addLog(`<span class="font-bold text-${currentPlayer.colorTw}-600">[${currentPlayer.name}]</span> 放棄考取【${pendingAction.tile.name}】。`);
+            
+            document.getElementById('skip-btn').classList.add('hidden');
+            pendingAction = null;
+            endTurn();
+        }
+
+        function promptExam(currentPlayer, tile) {
+            pendingAction = { type: 'profession_exam', tile: tile };
+            updateDOM(); 
+            const alertMsg = `🚨 是否花費 1000 元考取【${tile.name}】？\n(擲出 4,5,6 點考上)`;
+            const fullLogMsg = `<span class="font-bold text-${currentPlayer.colorTw}-600">[${currentPlayer.name}]</span> 準備考取證照...`;
+            
+            showEventCard(currentPlayer, tile, alertMsg, () => {
+                addLog(fullLogMsg);
+                const ind = document.getElementById('turn-indicator');
+                ind.innerText = `🚨 擲骰考試`;
+                ind.className = `bg-rose-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg mb-3 animate-pulse`;
+                
+                document.getElementById('skip-btn').classList.remove('hidden'); 
+                isAnimating = false; 
+            }, 2000, true);
+        }
+
+        function processPendingAction(actionDice) {
+            const currentPlayer = players[turn];
+            const tile = pendingAction.tile;
+            const type = pendingAction.type;
+            pendingAction = null; 
+            
+            let cost = 0;
+            let actionMsg = "";
+            let shouldMove = false;
+            let bossTileName = null;
+
+            if (type === 'gov') {
+                cost = (currentPlayer.role === '企業家' ? 10000 : 1000) * actionDice;
+                actionMsg = `擲出 ${actionDice} 點！\n${currentPlayer.role}繳交稅金 ${cost.toLocaleString()} 元`;
+            } else if (type === 'taxi') {
+                cost = 100 * actionDice;
+                actionMsg = `擲出 ${actionDice} 點！\n支付車資 ${cost} 元\n往前推進 ${actionDice} 格`;
+                shouldMove = true;
+            } else if (type === 'profession_fee') {
+                cost = 1000 * actionDice; 
+                actionMsg = `擲出 ${actionDice} 點！\n支付諮詢費 ${cost.toLocaleString()} 元`;
+            } else if (type === 'profession_exam') {
+                cost = 1000; 
+                if (actionDice >= 4) {
+                    if (!currentPlayer.certs.includes(tile.name)) currentPlayer.certs.push(tile.name);
+                    actionMsg = `擲出 ${actionDice} 點！\n🎉 恭喜考上【${tile.name}】證照！`;
+                } else {
+                    actionMsg = `擲出 ${actionDice} 點！\n💥 考試落榜，再接再厲...`;
+                }
+            } else if (type === 'company') {
+                cost = tile.cost * actionDice;
+                bossTileName = tile.name; // ⭐ 需要計算老闆收錢的格子
+            } else if (type === 'insurance') {
+                cost = 1000 * actionDice;
+                currentPlayer.policies += actionDice;
+                bossTileName = '保險公司'; // ⭐ 保險公司老闆收保費
+            } else if (type === 'stock') {
+                let shares = actionDice * 1000;
+                cost = shares * 1; // 繳交手續費
+                bossTileName = '證券交易所'; // ⭐ 證交所老闆收手續費
+            }
+
+            // ⭐====== 老闆結算與平手 PK 系統 ======⭐
+            if (bossTileName) {
+                let maxShares = 0;
+                let tiedPlayers = [];
+                players.forEach(p => {
+                    const shares = (p.stocks && p.stocks[bossTileName]) || 0;
+                    if (shares > maxShares) { 
+                        maxShares = shares; 
+                        tiedPlayers = [p]; 
+                    } else if (shares === maxShares && shares > 0) { 
+                        tiedPlayers.push(p); 
+                    }
+                });
+
+                let boss = null;
+                let tieMsg = "";
+
+                if (maxShares > 0) {
+                    if (tiedPlayers.length === 1) {
+                        boss = tiedPlayers[0];
+                        companyBosses[bossTileName] = boss.id;
+                    } else {
+                        // ⭐ 持股相同，進行平手擲骰子 PK！
+                        let bestRoll = 0;
+                        tiedPlayers.forEach(tp => {
+                            const r = Math.floor(Math.random() * 6) + 1;
+                            tieMsg += `${tp.name}(${r}點) `;
+                            if (r > bestRoll) { 
+                                bestRoll = r; 
+                                boss = tp; 
+                            }
+                        });
+                        companyBosses[bossTileName] = boss.id;
+                        tieMsg = `<br><span class="text-[12px] text-amber-500 font-black block mt-2 bg-slate-900/50 rounded-lg p-1">⚔️ 平手PK: ${tieMsg} ➔ 👑${boss.name}搶下老闆！</span>`;
+                    }
+                }
+
+                if (boss) {
+                    if (boss.id === currentPlayer.id) {
+                        cost = 0; // 老闆是自己，免費！
+                        if (type === 'company') {
+                            let earnings = actionDice * 100000;
+                            currentPlayer.money += earnings;
+                            actionMsg = `擲出 ${actionDice} 點！\n老闆巡視公司，大賺 ${earnings.toLocaleString()} 元！${tieMsg}`;
+                        }
+                        if (type === 'insurance') actionMsg = `擲出 ${actionDice} 點！\n自己是老闆，免費獲得 ${actionDice} 張保單。${tieMsg}`;
+                        if (type === 'stock') actionMsg = `擲出 ${actionDice} 點！\n自己是老闆，免收手續費。${tieMsg}`;
+                    } else {
+                        boss.money += cost; // ⭐ 錢轉進老闆口袋！
+                        if (type === 'company') actionMsg = `擲出 ${actionDice} 點！\n支付 ${cost.toLocaleString()} 元給老闆 [${boss.name}]${tieMsg}`;
+                        if (type === 'insurance') actionMsg = `擲出 ${actionDice} 點！\n獲得 ${actionDice} 張保單\n並支付 ${cost.toLocaleString()} 元給老闆 [${boss.name}]${tieMsg}`;
+                        if (type === 'stock') actionMsg = `擲出 ${actionDice} 點！\n支付手續費 ${cost.toLocaleString()} 元給老闆 [${boss.name}]${tieMsg}`;
+                    }
+                } else {
+                    // 沒有人買股票，付給系統(銀行)
+                    if (type === 'company') actionMsg = `擲出 ${actionDice} 點！\n在${tile.name}消費 ${cost.toLocaleString()} 元`;
+                    if (type === 'insurance') actionMsg = `擲出 ${actionDice} 點！\n購買 ${actionDice} 張保單\n花費 ${cost.toLocaleString()} 元`;
+                    if (type === 'stock') actionMsg = `擲出 ${actionDice} 點！\n繳交手續費 ${cost.toLocaleString()} 元`;
+                }
+            }
+
+            currentPlayer.money -= cost;
+            updateDOM(); 
+
+            const logActionMsg = actionMsg.replace(/<[^>]*>?/gm, ''); // 移除 HTML 標籤用於純文字紀錄
+            const fullLogMsg = `<span class="font-bold text-${currentPlayer.colorTw}-600">[${currentPlayer.name}]</span> ${logActionMsg.replace(/\n/g, '，')}。`;
+
+            showEventCard(currentPlayer, tile, actionMsg, () => {
+                addLog(fullLogMsg);
+                if (shouldMove) {
+                    startPlayerMovement(actionDice);
+                } else if (type === 'profession_fee') {
+                    if (currentPlayer.certs && currentPlayer.certs.includes(tile.name)) {
+                        addLog(`<span class="font-bold text-${currentPlayer.colorTw}-600">[${currentPlayer.name}]</span> 已擁有【${tile.name}】證照，不需再考。`);
+                        endTurn();
+                    } else {
+                        promptExam(currentPlayer, tile);
+                    }
+                } else {
+                    endTurn();
+                }
+            }, 2500, false);
+        }
+
+        function startPlayerMovement(dice) {
+            const currentPlayer = players[turn];
+            const mesh = playerMeshes[turn];
+            const startIndex = currentPlayer.pos;
+            const targetIndex = (startIndex + dice) % 28;
+            const passedStart = (startIndex + dice) >= 28 && startIndex > 0;
+            
+            let currentStep = 0;
+            const hopInterval = setInterval(() => {
+                currentStep++;
+                const nextTileIdx = (startIndex + currentStep) % 28;
+                const pos = getPlayerPos(nextTileIdx, turn);
+                
+                animateHop(mesh, pos.x, pos.z, 450, () => {
+                    if (currentStep === dice) {
+                        clearInterval(hopInterval);
+                        executeTurn(dice, targetIndex, passedStart);
+                    }
+                });
+            }, 500); 
+        }
+
+        function animateHop(mesh, endX, endZ, duration, onComplete) {
+            const startX = mesh.position.x;
+            const startZ = mesh.position.z;
+            const startY = mesh.position.y;
+            const startTime = performance.now();
+
+            function updateHop(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                mesh.position.x = startX + (endX - startX) * progress;
+                mesh.position.z = startZ + (endZ - startZ) * progress;
+                mesh.position.y = startY + Math.sin(progress * Math.PI) * 9.0;
+                mesh.rotation.y = progress * Math.PI * 2;
+
+                if (progress < 1) {
+                    requestAnimationFrame(updateHop);
+                } else {
+                    mesh.position.y = startY; 
+                    mesh.rotation.y = 0;
+                    if(onComplete) onComplete();
+                }
+            }
+            requestAnimationFrame(updateHop);
+        }
+
+        // 🌟 新增：觸發「財經新聞」洗牌抽卡動畫
+        function triggerNewsDraw(player, tile) {
+            const overlay = document.getElementById('news-draw-overlay');
+            const card = document.getElementById('news-draw-card');
+            const textEl = document.getElementById('news-draw-text');
+            
+            overlay.classList.remove('hidden');
+            void overlay.offsetWidth; 
+            overlay.classList.remove('opacity-0');
+            card.classList.remove('scale-50');
+            card.classList.add('scale-100');
+
+            let count = 0;
+            const shuffleTimer = setInterval(() => {
+                const randomCard = NEWS_CARDS[Math.floor(Math.random() * NEWS_CARDS.length)];
+                textEl.innerHTML = randomCard.text.replace(/\n/g, '<br>');
+                count++;
+                
+                if (count > 20) {
+                    clearInterval(shuffleTimer);
+                    const finalCard = NEWS_CARDS[Math.floor(Math.random() * NEWS_CARDS.length)];
+                    textEl.innerHTML = finalCard.text.replace(/\n/g, '<br>');
+                    
+                    setTimeout(() => {
+                        overlay.classList.add('opacity-0');
+                        card.classList.remove('scale-100');
+                        card.classList.add('scale-50');
+                        
+                        setTimeout(() => {
+                            overlay.classList.add('hidden');
+                            
+                            if (finalCard.isStock) {
+                                openStockMarket(player);
+                            } else {
+                                player.money += finalCard.value;
+                                updateDOM();
+                                const msg = `抽中新聞：「${finalCard.text}」`;
+                                addLog(`<span class="font-bold text-${player.colorTw}-600">[${player.name}]</span> ${msg}`);
+                                showEventCard(player, tile, msg, () => { endTurn(); }, 3000, false);
+                            }
+                        }, 300);
+                    }, 2000); 
+                }
+            }, 100);
+        }
+
+        // 🌟 新增：打開與渲染股市交易大廳
+        function openStockMarket(player) {
+            Object.keys(stockPrices).forEach(comp => {
+                const oldPrice = stockPrices[comp];
+                const changePercent = (Math.random() * 0.4) - 0.2; 
+                let newPrice = Math.round(oldPrice * (1 + changePercent));
+                if (newPrice < 10) newPrice = 10; 
+                stockPrices[comp] = newPrice;
+                stockTrends[comp] = newPrice - oldPrice;
+            });
+
+            const overlay = document.getElementById('stock-market-overlay');
+            overlay.classList.remove('hidden');
+            void overlay.offsetWidth;
+            overlay.classList.remove('opacity-0');
+            
+            renderStockMarket();
+            addLog(`股市已開盤！請各位行家進場交易。`);
+        }
+
+        // 🌟 新增：關閉股市
+        window.closeStockMarket = function() {
+            const overlay = document.getElementById('stock-market-overlay');
+            overlay.classList.add('opacity-0');
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                addLog(`股市已收盤。`);
+                endTurn(); 
+            }, 300);
+        };
+
+        // 🌟 ⭐ 動態計算並更新各公司的老闆狀態 ⭐
+        function evaluateBoss(company) {
+            let maxShares = 0;
+            let tiedPlayers = [];
+            players.forEach(p => {
+                const shares = (p.stocks && p.stocks[company]) || 0;
+                if (shares > maxShares) {
+                    maxShares = shares;
+                    tiedPlayers = [p];
+                } else if (shares === maxShares && shares > 0) {
+                    tiedPlayers.push(p);
+                }
+            });
+
+            const currentBossId = companyBosses[company];
+
+            if (maxShares === 0) {
+                companyBosses[company] = null;
+            } else if (tiedPlayers.length === 1) {
+                companyBosses[company] = tiedPlayers[0].id;
+            } else {
+                // 如果有多人平手，且現任老闆也在平手名單中，則老闆保留地位，直到下次消費時再進行 PK
+                if (currentBossId != null) {
+                    const isStillTied = tiedPlayers.find(p => p.id === currentBossId);
+                    if (!isStillTied) companyBosses[company] = null; 
+                }
+            }
+        }
+
+        // 🌟 尋找特定公司的最大股東 (取得經營權)
+        function getManager(company) {
+            const bossId = companyBosses[company];
+            return bossId != null ? players.find(p => p.id === bossId) : null;
+        }
+
+        // 🌟 買入股票
+        window.buyStock = function(playerId, company) {
+            const p = players.find(p => p.id === playerId);
+            const price = stockPrices[company];
+            const cost = price * 1000; // 每次買入 1張 (1000股)
+            if (p.money >= cost) {
+                p.money -= cost;
+                p.stocks[company] = (p.stocks[company] || 0) + 1000;
+                evaluateBoss(company); // 更新老闆狀態
+                updateDOM();
+                renderStockMarket();
+            }
+        };
+
+        // 🌟 賣出股票
+        window.sellStock = function(playerId, company) {
+            const p = players.find(p => p.id === playerId);
+            const price = stockPrices[company];
+            const revenue = price * 1000; 
+            if (p.stocks && p.stocks[company] >= 1000) {
+                p.money += revenue;
+                p.stocks[company] -= 1000;
+                evaluateBoss(company); // 更新老闆狀態
+                updateDOM();
+                renderStockMarket();
+            }
+        };
+
+        // 🌟 動態渲染股市表格
+        function renderStockMarket() {
+            const container = document.getElementById('stock-market-content');
+            let html = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">`;
+
+            Object.keys(stockPrices).forEach(comp => {
+                const price = stockPrices[comp];
+                const trend = stockTrends[comp] || 0;
+                const manager = getManager(comp);
+                const trendColor = trend >= 0 ? 'text-emerald-400' : 'text-rose-400';
+                const trendSign = trend >= 0 ? '+' : '';
+
+                html += `<div class="bg-slate-700/50 rounded-2xl p-4 border border-slate-600">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-xl font-bold text-white">${comp}</h3>
+                        <span class="text-2xl font-black font-mono ${trendColor}">$${price} <span class="text-sm">(${trendSign}${trend})</span></span>
+                    </div>
+                    <div class="text-sm font-bold mb-4 flex items-center gap-1 ${manager ? 'text-yellow-400' : 'text-slate-400'}">
+                        <i data-lucide="crown" class="w-4 h-4"></i> 經營權：${manager ? manager.name : '無'}
+                    </div>
+                    <div class="space-y-3">
+                `;
+
+                players.forEach(p => {
+                    const shares = (p.stocks && p.stocks[comp]) || 0;
+                    const canBuy = p.money >= price * 1000;
+                    const canSell = shares >= 1000;
+                    html += `
+                        <div class="flex items-center justify-between bg-slate-800 p-2 rounded-xl border border-slate-600/50">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 rounded-full bg-${p.colorTw}-500 shrink-0"></span>
+                                <span class="text-sm font-bold truncate w-16">${p.name}</span>
+                                <span class="text-xs font-mono text-slate-300">${shares} 股</span>
+                            </div>
+                            <div class="flex gap-1 shrink-0">
+                                <button onclick="buyStock(${p.id}, '${comp}')" class="px-3 py-1 text-xs font-bold rounded-lg transition-all ${canBuy ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/30' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}" ${!canBuy ? 'disabled' : ''}>買</button>
+                                <button onclick="sellStock(${p.id}, '${comp}')" class="px-3 py-1 text-xs font-bold rounded-lg transition-all ${canSell ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white border border-rose-500/30' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}" ${!canSell ? 'disabled' : ''}>賣</button>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div></div>`;
+            });
+            html += `</div>`;
+            container.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function showEventCard(player, tile, msg, callback, duration = 3000, isAlert = false) {
+            const overlay = document.getElementById('event-card-overlay');
+            const card = document.getElementById('event-card');
+            const titleEl = document.getElementById('ec-title');
+            const descEl = document.getElementById('ec-desc');
+            const playerEl = document.getElementById('ec-player');
+            const iconEl = document.getElementById('ec-icon');
+            
+            titleEl.innerText = tile.name;
+            descEl.innerHTML = msg.replace(/\n/g, '<br>');
+            playerEl.innerText = player.name;
+            
+            if (isAlert) {
+                card.className = "backdrop-blur-xl border-4 shadow-[0_20px_60px_rgba(225,29,72,0.4)] rounded-3xl p-6 md:p-8 max-w-sm w-11/12 flex flex-col items-center text-center origin-center bg-slate-900 border-rose-500";
+                titleEl.className = "text-2xl font-black text-white mb-2";
+                descEl.className = "text-rose-200 font-bold text-lg";
+                playerEl.className = `mt-4 px-4 py-1.5 rounded-full text-sm font-bold text-white shadow-md bg-rose-600`;
+                iconEl.className = `w-16 h-16 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg bg-rose-500`;
+                iconEl.innerHTML = `<i data-lucide="alert-triangle" class="w-8 h-8"></i>`;
+            } else {
+                card.className = "backdrop-blur-xl border-4 shadow-[0_20px_60px_rgba(0,0,0,0.4)] rounded-3xl p-6 md:p-8 max-w-sm w-11/12 flex flex-col items-center text-center origin-center bg-white/95 border-white";
+                titleEl.className = "text-2xl font-black text-slate-800 mb-2";
+                descEl.className = "text-slate-600 font-bold text-lg";
+                playerEl.className = `mt-4 px-4 py-1.5 rounded-full text-sm font-bold text-white shadow-md bg-${player.colorTw}-500`;
+                iconEl.className = `w-16 h-16 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg bg-${player.colorTw}-400`;
+                iconEl.innerHTML = `<i data-lucide="zap" class="w-8 h-8"></i>`;
+            }
+            lucide.createIcons();
+
+            card.style.transition = 'none';
+            card.style.transform = 'translate(0px, 0px) scale(0.5)';
+            card.style.opacity = '0';
+            void card.offsetWidth; 
+
+            card.style.transition = 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; 
+            card.style.transform = 'translate(0px, 0px) scale(1)';
+            card.style.opacity = '1';
+            overlay.classList.remove('opacity-0');
+            overlay.classList.add('opacity-100');
+
+            setTimeout(() => {
+                const logRect = document.getElementById('logs-container').getBoundingClientRect();
+                const cardRect = card.getBoundingClientRect();
+                const targetX = logRect.left + logRect.width/2 - (cardRect.left + cardRect.width/2);
+                const targetY = logRect.top + logRect.height/2 - (cardRect.top + cardRect.height/2);
+
+                card.style.transition = 'all 0.6s ease-in-out';
+                card.style.transform = `translate(${targetX}px, ${targetY}px) scale(0.05)`;
+                card.style.opacity = '0';
+
+                setTimeout(() => {
+                    overlay.classList.remove('opacity-100');
+                    overlay.classList.add('opacity-0');
+                    callback();
+                }, 600);
+            }, duration);
+        }
+
+        function executeTurn(dice, targetPos, passedStart) {
+            const currentPlayer = players[turn];
+            const tile = BOARD_TILES[targetPos];
+            currentPlayer.pos = targetPos;
+
+            let startMsg = "";
+            if (passedStart) {
+                currentPlayer.money += 200000;
+                let msgs = ["經過起點！領 20萬"];
+
+                let insDeduct = currentPlayer.policies * 1000;
+                if (insDeduct > 0) {
+                    let insBossId = companyBosses['保險公司'];
+                    if (insBossId != null && insBossId !== currentPlayer.id) {
+                        let insBoss = players.find(p => p.id === insBossId);
+                        if (insBoss) {
+                            insBoss.money += insDeduct; // ⭐ 老闆收保費
+                            currentPlayer.money -= insDeduct;
+                            msgs.push(`並扣保費 ${insDeduct.toLocaleString()} 給老闆[${insBoss.name}]`);
+                        }
+                    } else if (insBossId === currentPlayer.id) {
+                        msgs.push(`自己是保險老闆免保費`);
+                    } else {
+                        currentPlayer.money -= insDeduct;
+                        msgs.push(`扣繳保費 ${insDeduct.toLocaleString()} 元`);
+                    }
+                }
+
+                // ⭐ 計算老闆的管銷費用
+                let ownedCount = Object.keys(companyBosses).filter(comp => companyBosses[comp] === currentPlayer.id).length;
+                if (ownedCount > 0) {
+                    let mgtFee = ownedCount * 280000;
+                    currentPlayer.money -= mgtFee;
+                    msgs.push(`支付 ${ownedCount} 家公司管銷費 ${mgtFee.toLocaleString()} 元`);
+                }
+
+                startMsg = msgs.join('，') + "<br>";
+                updateDOM();
+            }
+
+            if (tile.type === 'news') {
+                addLog(`<span class="font-bold text-${currentPlayer.colorTw}-600">[${currentPlayer.name}]</span> 進入「財經新聞」。<br><span class="text-slate-600 text-[13px]">${startMsg}查看全球新聞...</span>`);
+                triggerNewsDraw(currentPlayer, tile);
+                return;
+            }
+
+            const hasCert = tile.type === 'profession' && currentPlayer.certs.includes(tile.name);
+
+            if (['gov', 'company', 'insurance', 'stock', 'taxi', 'profession'].includes(tile.type) && !hasCert) {
+                pendingAction = { type: tile.type === 'profession' ? 'profession_fee' : tile.type, tile: tile };
+                updateDOM(); 
+                
+                let alertMsg = "";
+                let btnMsg = "";
+                if (tile.type === 'gov') {
+                   alertMsg = "🚨 點擊骰子決定稅金"; btnMsg = "決定稅金";
+                } else if (tile.type === 'company') {
+                   if (companyBosses[tile.name] === currentPlayer.id) {
+                       alertMsg = `🚨 點擊骰子決定收益\n(每點 100,000 元)`; btnMsg = "決定收益";
+                   } else {
+                       alertMsg = `🚨 點擊骰子決定消費\n(每點 ${tile.cost.toLocaleString()})`; btnMsg = "決定消費";
+                   }
+                } else if (tile.type === 'taxi') {
+                   alertMsg = "🚨 點擊骰子決定搭車距離\n(每格 100 元)"; btnMsg = "決定距離";
+                } else if (tile.type === 'insurance') {
+                   alertMsg = "🚨 點擊骰子決定保單數量\n(每張 1000 元)"; btnMsg = "決定保單";
+                } else if (tile.type === 'stock') {
+                   alertMsg = "🚨 點擊骰子繳交手續費\n(每股手續費 1 元)"; btnMsg = "決定手續費";
+                } else if (tile.type === 'profession') {
+                   alertMsg = "🚨 點擊骰子決定諮詢費\n(每點 1000 元)"; btnMsg = "決定費用";
+                }
+                
+                const fullLogMsg = `<span class="font-bold text-${currentPlayer.colorTw}-600">[${currentPlayer.name}]</span> 進入「${tile.name}」。<br><span class="text-slate-600 text-[13px]">${startMsg}等待擲骰決定！</span>`;
+                
+                showEventCard(currentPlayer, tile, alertMsg, () => {
+                    addLog(fullLogMsg);
+                    const ind = document.getElementById('turn-indicator');
+                    ind.innerText = `🚨 ${btnMsg}`;
+                    ind.className = `bg-rose-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg mb-3 animate-pulse`;
+                    isAnimating = false; 
+                }, 2000, true);
+                return; 
+            }
+
+            let newRole = currentPlayer.role;
+            let actionMsg = "";
+
+            switch (tile.type) {
+                case 'role_boss':
+                    newRole = '企業家';
+                    actionMsg = `戴上皇冠！身分轉為【企業家】💼`;
+                    break;
+                case 'role_employee':
+                    newRole = '上班族';
+                    actionMsg = `回到座位，身分降為【上班族】💻`;
+                    break;
+                case 'sale':
+                    currentPlayer.money += 50000;
+                    actionMsg = `獲得大金幣！銷貨進帳 50,000 元`;
+                    break;
+                case 'purchase':
+                    currentPlayer.money -= 30000;
+                    actionMsg = `紅袋子購物支出 30,000 元`;
+                    break;
+                case 'start':
+                    actionMsg = `抵達總部高塔休息。`;
+                    break;
+                default:
+                    if (hasCert) {
+                        actionMsg = `出示【${tile.name}】證照！\n同行相見歡，免收諮詢費 😎`;
+                    } else {
+                        actionMsg = `拜訪 ${tile.name}，觀察局勢一回合。`;
+                    }
+            }
+
+            const logActionMsg = actionMsg.replace(/<[^>]*>?/gm, ''); 
+            const fullLogMsg = `<span class="font-bold text-${currentPlayer.colorTw}-600">[${currentPlayer.name}]</span> 擲出 ${dice} 步，進入「${tile.name}」。<br><span class="text-slate-600 text-[13px]">${startMsg}${logActionMsg.replace(/\n/g, ' ')}</span>`;
+
+            currentPlayer.role = newRole;
+            updateDOM();
+
+            showEventCard(currentPlayer, tile, actionMsg, () => {
+                addLog(fullLogMsg);
+                endTurn(); 
+            }, 3000, false);
+        }
+
+        // ==========================================
+        // 5. 遊戲畫面(DOM) 更新
+        // ==========================================
+        function addLog(msg) {
+            logs.unshift(msg);
+            if (logs.length > 20) logs.pop();
+            const container = document.getElementById('logs-container');
+            container.innerHTML = '';
+            logs.forEach((log, index) => {
+                const div = document.createElement('div');
+                div.className = `p-2 rounded-lg bg-white/50 border ${index === 0 ? 'border-teal-300 shadow-sm' : 'border-transparent opacity-70'} mb-1`;
+                div.innerHTML = log;
+                container.appendChild(div);
+            });
+        }
+
+        function updateDOM() {
+            const container = document.getElementById('players-container');
+            let htmlStr = '';
+
+            players.forEach((p, idx) => {
+                const isActive = (idx === turn);
+                const baseClass = "glass-panel rounded-2xl p-2 md:p-3 flex-1 min-w-[120px] max-w-[200px] transition-all duration-300 border-2";
+                const activeClass = isActive ? `border-${p.colorTw}-400 transform scale-105 shadow-md` : "border-transparent opacity-70 scale-100";
+                
+                const policyBadge = p.policies ? `<p class="text-[10px] text-slate-500 font-bold mt-1 flex items-center gap-1"><i data-lucide="shield-check" class="w-3 h-3"></i> 保單: ${p.policies} 張</p>` : '';
+                const certBadge = (p.certs && p.certs.length > 0) ? `<p class="text-[10px] text-slate-500 font-bold mt-1 flex items-center gap-1 flex-wrap"><i data-lucide="award" class="w-3 h-3"></i> 證照: ${p.certs.join(', ')}</p>` : '';
+                
+                // ⭐ 判斷自己是哪幾家公司的老闆，並渲染皇冠標記！
+                const bossOf = Object.keys(companyBosses).filter(comp => companyBosses[comp] === p.id);
+                const bossBadge = bossOf.length > 0 ? `<div class="flex flex-wrap gap-1 mt-1">${bossOf.map(c => `<span class="bg-yellow-100 text-yellow-800 border border-yellow-300 text-[10px] px-1.5 py-0.5 rounded-sm font-bold flex items-center"><i data-lucide="crown" class="w-3 h-3 mr-0.5"></i> ${c}老闆</span>`).join('')}</div>` : '';
+
+                const cardHtml = `
+                    <div class="${baseClass} ${activeClass}">
+                        <div class="flex justify-between items-center mb-1">
+                            <h2 class="font-bold text-${p.colorTw}-700 flex items-center gap-1 text-sm truncate">
+                                <span class="w-2.5 h-2.5 bg-${p.colorTw}-500 inline-block rounded-sm shrink-0"></span> 
+                                <span class="truncate">${p.name}</span>
+                            </h2>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-${p.colorTw}-100 text-${p.colorTw}-800 font-bold border border-${p.colorTw}-200 shrink-0">${p.role}</span>
+                        </div>
+                        <p class="text-base md:text-lg font-black text-slate-800 truncate">$${p.money.toLocaleString()}</p>
+                        ${policyBadge}
+                        ${certBadge}
+                        ${bossBadge}
+                    </div>
+                `;
+                htmlStr += cardHtml;
+            });
+            
+            container.innerHTML = htmlStr;
+
+            if (!pendingAction) {
+                const ind = document.getElementById('turn-indicator');
+                const cp = players[turn];
+                ind.className = `bg-${cp.colorTw}-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg mb-3 animate-bounce`;
+                ind.innerText = `輪到 ${cp.name} 回合`;
+            }
+
+            lucide.createIcons();
+        }
+
+        // ==========================================
+        // 6. 渲染迴圈
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+            if (controls) controls.update();
+            
+            scene.traverse((obj) => {
+                if (obj.name === "floatingGem") {
+                    obj.rotation.y += 0.02;
+                }
+            });
+
+            if (typeof clouds !== 'undefined' && clouds.length > 0) {
+                clouds.forEach(cloud => {
+                    cloud.position.x += 0.16; 
+                    cloud.position.z -= 0.16; 
+                    if (cloud.position.x - cloud.position.z > 480) {
+                        cloud.position.x -= 400;
+                        cloud.position.z += 400;
+                    }
+                });
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        window.onload = () => {
+            lucide.createIcons();
+            init3D();
+            setPlayerCount(2); 
+        };
+    </script>
+</body>
+</html>
